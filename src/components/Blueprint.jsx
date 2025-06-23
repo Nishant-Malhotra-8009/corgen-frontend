@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiChevronDown, FiChevronUp, FiEdit } from 'react-icons/fi';
+import jsPDF from 'jspdf';
+import { useNavigate } from 'react-router-dom';
 import './css/BluePrint.css';
 
 const BlueprintPage = () => {
@@ -12,7 +14,7 @@ const BlueprintPage = () => {
     submodule: null,
     activity: null
   });
-
+  const navigate = useNavigate();
   useEffect(() => {
     const stored = localStorage.getItem("generatedCourse");
     if (stored) {
@@ -26,6 +28,79 @@ const BlueprintPage = () => {
       [moduleId]: !prev[moduleId]
     }));
   };
+  const downloadPDF = () => {
+  const doc = new jsPDF();
+  let y = 20;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const leftMargin = 15;
+  const maxWidth = 180;
+
+  const checkPageBreak = (lines, lineHeight = 6) => {
+    if (y + lines.length * lineHeight > pageHeight - 20) {
+      doc.addPage();
+      y = 20;
+    }
+  };
+
+  const addHeading = (text, indent = 0, fontSize = 14) => {
+    doc.setFontSize(fontSize);
+    doc.setFont(undefined, 'bold');
+    const lines = doc.splitTextToSize(text, maxWidth - indent);
+    checkPageBreak(lines, 8);
+    lines.forEach(line => {
+      doc.text(line, leftMargin + indent, y);
+      y += 8;
+    });
+    doc.setFont(undefined, 'normal');
+  };
+
+  const addText = (text, indent = 0, fontSize = 12, gap = 6) => {
+    doc.setFontSize(fontSize);
+    doc.setFont(undefined, 'normal');
+    const lines = doc.splitTextToSize(text, maxWidth - indent);
+    checkPageBreak(lines, gap);
+    lines.forEach(line => {
+      doc.text(line, leftMargin + indent, y);
+      y += gap;
+    });
+  };
+
+  // Start writing the content
+  addHeading(`Course ID: ${course.course_id}`);
+  addHeading(`Title: ${course.outline.title}`);
+  addText(`Duration: ${course.outline.duration}`);
+  addText(`Credits: ${course.outline.credits}`);
+  
+  addHeading(`\nDescription:`, 0);
+  addText(course.outline.description, 4);
+
+  addHeading(`\nPrerequisites:`, 0);
+  course.outline.prerequisites.forEach(p => addText(`• ${p}`, 6));
+
+  addHeading(`\nLearning Outcomes:`, 0);
+  course.outline.learning_outcomes.forEach(o => addText(`• ${o}`, 6));
+
+  course.modules.forEach((mod, mIdx) => {
+    addHeading(`\nModule ${mIdx + 1}: ${mod.moduleTitle}`, 0, 13);
+    addText(mod.moduleDescription, 4);
+    addText(`Hours: ${mod.moduleHours}`, 4);
+
+    mod.submodules.forEach((sub, sIdx) => {
+      addHeading(`\n  Submodule ${sIdx + 1}: ${sub.submoduleName}`, 6, 12);
+      addText(sub.submoduleDescription, 8);
+
+      sub.activities.forEach((act, aIdx) => {
+        addHeading(`\n    Activity ${aIdx + 1}: ${act.activityName}`, 10, 11);
+        addText(`Type: ${act.activityType}`, 12);
+        addText(`Objective: ${act.activityObjective}`, 12);
+        addText(`Description: ${act.activityDescription}`, 12);
+      });
+    });
+  });
+
+  doc.save(`${course.outline.title.replace(/\s+/g, '_')}_Blueprint.pdf`);
+};
+
 
   const toggleSubmodule = (moduleId, submoduleId) => {
     const key = `${moduleId}-${submoduleId}`;
@@ -56,7 +131,11 @@ const BlueprintPage = () => {
       activity: null
     });
   };
-
+  const handleSaveAndContinue = () => {
+    if (saveChanges()) {
+      navigate("/generate");
+    }
+  };
   const cancelEdit = () => {
     setEditing({
       outline: false,
@@ -69,7 +148,7 @@ const BlueprintPage = () => {
   if (!course) return <div className="loading-spinner">Loading Blueprint...</div>;
 
   return (
-    <div className="blueprint-container">
+    <div className="blueprint-container" id="blueprint-container">
       {/* Outline Section */}
       <div className="outline-section-blueprint">
         <div className="section-header-blueprint">
@@ -378,6 +457,23 @@ const BlueprintPage = () => {
             </div>
           ))}
         </div>
+
+        <div className="save-continue-container">
+        <button 
+          className="save-continue-btn"
+          onClick={handleSaveAndContinue}
+        >
+          Save & Continue
+        </button>
+        <button 
+            className="download-pdf-btn"
+            onClick={downloadPDF}
+            style={{ marginBottom: '1rem' }}
+            >
+            Download as PDF
+            </button>
+
+      </div>
       </div>
     </div>
   );
